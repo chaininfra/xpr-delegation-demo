@@ -1,0 +1,612 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, no-console */
+/**
+ * Advanced Zustand Middleware Patterns
+ *
+ * Enhanced middleware implementations for Zustand state management,
+ * including logging, analytics, optimization, and middleware composition.
+ *
+ * @fileoverview Advanced middleware patterns for Zustand stores
+ */
+
+import { StateCreator, StoreMutatorIdentifier } from 'zustand';
+
+// Global declarations for browser APIs
+declare const performance: {
+  now(): number;
+};
+
+declare const process: {
+  env: {
+    NODE_ENV?: string;
+  };
+};
+
+declare const fetch: any;
+declare const window: any;
+
+/**
+ * Middleware configuration options
+ */
+export interface MiddlewareConfig {
+  enableLogging?: boolean;
+  enableAnalytics?: boolean;
+  enableOptimization?: boolean;
+  enableDevtools?: boolean;
+  enablePersist?: boolean;
+  enableSubscriptions?: boolean;
+  logLevels?: LogLevel[];
+  analyticsEndpoint?: string;
+  optimizationThreshold?: number;
+}
+
+export enum LogLevel {
+  DEBUG = 'debug',
+  INFO = 'info',
+  WARN = 'warn',
+  ERROR = 'error',
+}
+
+/**
+ * Action metadata for middleware
+ */
+export interface ActionMetadata {
+  action: string;
+  timestamp: number;
+  previousState: any;
+  nextState: any;
+  duration?: number;
+  success: boolean;
+  error?: Error;
+  payload?: any;
+}
+
+/**
+ * Performance tracking information
+ */
+export interface PerformanceMetrics {
+  actionsPerSecond: number;
+  averageActionDuration: number;
+  memoryUsage: number;
+  stateSize: number;
+  lastOptimization: number;
+}
+
+/**
+ * Logging middleware with configurable levels
+ */
+export const loggingMiddleware =
+  (config: MiddlewareConfig) =>
+  <T, M extends [StoreMutatorIdentifier, unknown][]>(
+    creator: StateCreator<T, M>
+  ): StateCreator<T, M> =>
+  (set, get, store) => {
+    const originalSet = set;
+
+    // Enhanced set function with logging
+    const loggedSet: typeof set = (partial, replace, actionType) => {
+      const startTime = performance.now();
+      const previousState = get();
+      let success = true;
+      let error: Error | undefined;
+
+      try {
+        const result = originalSet(partial, replace, actionType);
+        const nextState = get();
+        const duration = performance.now() - startTime;
+
+        // Log action if enabled
+        if (
+          config.enableLogging &&
+          config.logLevels?.includes(LogLevel.DEBUG)
+        ) {
+          const meta: ActionMetadata = {
+            action: actionType || 'unknown',
+            timestamp: Date.now(),
+            previousState: this.shouldLogState(previousState)
+              ? previousState
+              : '[REDACTED]',
+            nextState: this.shouldLogState(nextState)
+              ? nextState
+              : '[REDACTED]',
+            duration,
+            success,
+            payload: this.shouldLogPayload(partial) ? partial : '[REDACTED]',
+          };
+
+          console.log(`[Zustand] Action: ${meta.action}`, {
+            duration: `${meta.duration.toFixed(2)}ms`,
+            success: meta.success,
+            ...(meta.payload && { payload: meta.payload }),
+          });
+        }
+
+        return result;
+      } catch (err) {
+        success = false;
+        error = err as Error;
+
+        if (
+          config.enableLogging &&
+          config.logLevels?.includes(LogLevel.ERROR)
+        ) {
+          console.error('[Zustand] Action failed:', actionType, error);
+        }
+
+        throw err;
+      }
+    };
+
+    // Note: Security logging functions available but currently using direct logic
+
+    return creator(loggedSet, get, store);
+  };
+
+/**
+ * Analytics middleware for user behavior tracking
+ */
+export const analyticsMiddleware =
+  (config: MiddlewareConfig) =>
+  <T, M extends [StoreMutatorIdentifier, unknown][]>(
+    creator: StateCreator<T, M>
+  ): StateCreator<T, M> =>
+  (set, get, store) => {
+    let analyticsQueue: ActionMetadata[] = [];
+    const maxQueueSize = 100;
+    const flushInterval = 30000; // 30 seconds
+
+    // Start analytics flush timer
+    const analyticsTimer = setInterval(() => {
+      if (analyticsQueue.length > 0 && config.enableAnalytics) {
+        flushAnalytics();
+      }
+    }, flushInterval);
+
+    const originalSet = set;
+
+    const analyticsSet: typeof set = (partial, replace, actionType) => {
+      const startTime = performance.now();
+      const previousState = get();
+
+      try {
+        const result = originalSet(partial, replace, actionType);
+        const nextState = get();
+        const duration = performance.now() - startTime;
+
+        // Queue analytics data
+        const meta: ActionMetadata = {
+          action: actionType || 'unknown',
+          timestamp: Date.now(),
+          previousState: sanitizeForAnalytics(previousState),
+          nextState: sanitizeForAnalytics(nextState),
+          duration,
+          success: true,
+          payload: sanitizeForAnalytics(partial),
+        };
+
+        addToAnalyticsQueue(meta);
+
+        return result;
+      } catch (err) {
+        const meta: ActionMetadata = {
+          action: actionType || 'unknown',
+          timestamp: Date.now(),
+          previousState: sanitizeForAnalytics(get()),
+          nextState: sanitizeForAnalytics(get()),
+          duration: performance.now() - startTime,
+          success: false,
+          error: err as Error,
+          payload: sanitizeForAnalytics(partial),
+        };
+
+        addToAnalyticsQueue(meta);
+        throw err;
+      }
+    };
+
+    const sanitizeForAnalytics = (data: any): any => {
+      if (!data || typeof data !== 'object') return data;
+
+      // Remove sensitive data for analytics
+      const sanitized = { ...data };
+
+      if (sanitized.wallet?.session) {
+        sanitized.wallet.session = '[REDACTED]';
+      }
+
+      if (sanitized.account?.private_keys) {
+        delete sanitized.account.private_keys;
+      }
+
+      return sanitized;
+    };
+
+    const addToAnalyticsQueue = (meta: ActionMetadata): void => {
+      analyticsQueue.push(meta);
+
+      // Flush if queue is full
+      if (analyticsQueue.length >= maxQueueSize) {
+        flushAnalytics();
+      }
+    };
+
+    const flushAnalytics = () => {
+      if (analyticsQueue.length === 0) return;
+
+      try {
+        const payload = {
+          timestamp: Date.now(),
+          sessionId: generateSessionId(),
+          actions: analyticsQueue,
+        };
+
+        // Send to analytics endpoint
+        if (config.analyticsEndpoint && typeof fetch !== 'undefined') {
+          fetch(config.analyticsEndpoint, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Analytics-Source': 'zustand-middleware',
+            },
+            body: JSON.stringify(payload),
+          }).catch(err => {
+            console.warn('[Analytics] Failed to send analytics:', err);
+          });
+        }
+
+        analyticsQueue = [];
+      } catch (err) {
+        console.error('[Analytics] Failed to flush analytics:', err);
+        analyticsQueue = [];
+      }
+    };
+
+    const generateSessionId = (): string => {
+      return `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    };
+
+    // Cleanup on destroy
+    store.subscribe(() => {}, {
+      onDestroy: () => {
+        clearInterval(analyticsTimer);
+        flushAnalytics();
+      },
+    });
+
+    return creator(analyticsSet, get, store);
+  };
+
+/**
+ * Performance optimization middleware
+ */
+export const optimizationMiddleware =
+  (config: MiddlewareConfig) =>
+  <T, M extends [StoreMutatorIdentifier, unknown][]>(
+    creator: StateCreator<T, M>
+  ): StateCreator<T, M> =>
+  (set, get, store) => {
+    let actionCount = 0;
+    let totalDuration = 0;
+    let lastOptimization = Date.now();
+    const optimizationThreshold = config.optimizationThreshold || 1000; // ms
+
+    const originalSet = set;
+
+    const optimizedSet: typeof set = (partial, replace, actionType) => {
+      const startTime = performance.now();
+
+      try {
+        const result = originalSet(partial, replace, actionType);
+        const duration = performance.now() - startTime;
+
+        actionCount++;
+        totalDuration += duration;
+
+        // Perform optimization if needed
+        if (shouldOptimize()) {
+          performOptimization();
+        }
+
+        return result;
+      } catch (err) {
+        const duration = performance.now() - startTime;
+        totalDuration += duration;
+        throw err;
+      }
+    };
+
+    const shouldOptimize = (): boolean => {
+      const timeSinceLastOptimization = Date.now() - lastOptimization;
+      const averageDuration = actionCount > 0 ? totalDuration / actionCount : 0;
+
+      return (
+        timeSinceLastOptimization > optimizationThreshold ||
+        averageDuration > 50 || // Average action takes more than 50ms
+        actionCount > 100 // More than 100 actions performed
+      );
+    };
+
+    const performOptimization = () => {
+      // Force garbage collection optimization
+
+      // Example optimizations
+      if (config.enableOptimization) {
+        // Force garbage collection if available
+        if ('gc' in window && typeof (window as any).gc === 'function') {
+          (window as any).gc();
+        }
+
+        // Update metrics
+        lastOptimization = Date.now();
+        actionCount = 0;
+        totalDuration = 0;
+
+        console.log(
+          '[Zustand] Optimization performed at:',
+          new Date().toISOString()
+        );
+      }
+    };
+
+    // Periodic optimization
+    const optimizationTimer = setInterval(() => {
+      if (config.enableOptimization) {
+        performOptimization();
+      }
+    }, optimizationThreshold);
+
+    // Cleanup
+    store.subscribe(() => {}, {
+      onDestroy: () => {
+        clearInterval(optimizationTimer);
+      },
+    });
+
+    return creator(optimizedSet, get, store);
+  };
+
+/**
+ * Subscription middleware for external integrations
+ */
+export const subscriptionMiddleware =
+  (config: MiddlewareConfig) =>
+  <T, M extends [StoreMutatorIdentifier, unknown][]>(
+    creator: StateCreator<T, M>
+  ): StateCreator<T, M> =>
+  (set, get, store) => {
+    const subscribers = new Set<
+      (state: T, prevState: T, action?: string) => void
+    >();
+    const actionSubscribers = new Map<
+      string,
+      Set<(payload: any, state: T) => void>
+    >();
+
+    // Enhanced set with subscription support
+    const originalSet = set;
+
+    const subscriptionSet: typeof set = (partial, replace, actionType) => {
+      const prevState = get();
+
+      try {
+        const result = originalSet(partial, replace, actionType);
+        const newState = get();
+
+        // Notify state subscribers
+        if (config.enableSubscriptions) {
+          subscribers.forEach(sub => {
+            try {
+              sub(newState, prevState, actionType);
+            } catch (err) {
+              console.warn('[Subscription] Subscriber error:', err);
+            }
+          });
+        }
+
+        // Notify action-specific subscribers
+        if (actionType && actionSubscribers.has(actionType)) {
+          const actionSubs = actionSubscribers.get(actionType)!;
+          actionSubs.forEach(sub => {
+            try {
+              sub(partial, newState);
+            } catch (err) {
+              console.warn('[Subscription] Action subscriber error:', err);
+            }
+          });
+        }
+
+        return result;
+      } catch (err) {
+        // Notify error subscribers
+        subscribers.forEach(sub => {
+          try {
+            sub(get(), prevState, `${actionType}_ERROR`);
+          } catch (subErr) {
+            console.warn('[Subscription] Error subscriber failed:', subErr);
+          }
+        });
+        throw err;
+      }
+    };
+
+    // Subscription methods
+    const subscribe = (
+      callback: (state: T, prevState: T, action?: string) => void
+    ) => {
+      subscribers.add(callback);
+      return () => subscribers.delete(callback);
+    };
+
+    const subscribeToAction = (
+      actionType: string,
+      callback: (payload: any, state: T) => void
+    ) => {
+      if (!actionSubscribers.has(actionType)) {
+        actionSubscribers.set(actionType, new Set());
+      }
+      actionSubscribers.get(actionType)!.add(callback);
+
+      return () => {
+        const subs = actionSubscribers.get(actionType);
+        if (subs) {
+          subs.delete(callback);
+          if (subs.size === 0) {
+            actionSubscribers.delete(actionType);
+          }
+        }
+      };
+    };
+
+    const unsubscribe = () => {
+      subscribers.clear();
+      actionSubscribers.clear();
+    };
+
+    // Extend store with subscription methods
+    const storeWithSubscriptions = {
+      ...store,
+      subscribe,
+      subscribeToAction,
+      unsubscribe,
+      getSubscriberCount: () => subscribers.size,
+      getActionSubscriberCount: (actionType: string) =>
+        actionSubscribers.get(actionType)?.size || 0,
+    };
+
+    // Cleanup on destroy
+    store.subscribe(() => {}, {
+      onDestroy: unsubscribe,
+    });
+
+    return creator(subscriptionSet, get, storeWithSubscriptions);
+  };
+
+/**
+ * Developer tools middleware with enhanced debugging
+ */
+export const devtoolsMiddleware =
+  (config: MiddlewareConfig) =>
+  <T, M extends [StoreMutatorIdentifier, unknown][]>(
+    creator: StateCreator<T, M>
+  ): StateCreator<T, M> =>
+  (set, get, store) => {
+    if (!config.enableDevtools || process.env.NODE_ENV === 'production') {
+      return creator(set, get, store);
+    }
+
+    const enhancedSet: typeof set = (partial, replace, actionType) => {
+      const startTime = performance.now();
+      const prevState = get();
+
+      try {
+        const result = set(partial, replace, actionType);
+        const duration = performance.now() - startTime;
+        const newState = get();
+
+        // Enhanced devtools logging
+        console.group(
+          `🔧 [Zustand Devtools] ${actionType || 'Unknown Action'}`
+        );
+        console.log('Duration:', `${duration.toFixed(2)}ms`);
+        console.log('Previous State:', prevState);
+        console.log('Payload:', partial);
+        console.log('New State:', newState);
+
+        // Performance warnings
+        if (duration > 100) {
+          console.warn('⚠️ Slow action detected:', duration.toFixed(2), 'ms');
+        }
+
+        // State change analysis
+        const changes = analyzeStateChanges(prevState, newState);
+        if (changes.length > 0) {
+          console.log('Changes:', changes);
+        }
+
+        console.groupEnd();
+
+        return result;
+      } catch (err) {
+        console.error('❌ [Zustand Devtools] Action failed:', actionType, err);
+        throw err;
+      }
+    };
+
+    const analyzeStateChanges = (prev: any, next: any): string[] => {
+      const changes: string[] = [];
+
+      if (typeof prev !== 'object' || typeof next !== 'object') {
+        return changes;
+      }
+
+      const analyzeObject = (obj1: any, obj2: any, path = ''): void => {
+        const keys = new Set([
+          ...Object.keys(obj1 || {}),
+          ...Object.keys(obj2 || {}),
+        ]);
+
+        keys.forEach(key => {
+          const newPath = path ? `${path}.${key}` : key;
+
+          if (!(key in (obj1 || {}))) {
+            changes.push(`+ ${newPath}: ${JSON.stringify(obj2[key])}`);
+          } else if (!(key in (obj2 || {}))) {
+            changes.push(`- ${newPath}: ${JSON.stringify(obj1[key])}`);
+          } else if (JSON.stringify(obj1[key]) !== JSON.stringify(obj2[key])) {
+            changes.push(
+              `~ #{newPath}: ${JSON.stringify(obj1[key])} → ${JSON.stringify(obj2[key])}`
+            );
+          }
+        });
+      };
+
+      analyzeObject(prev, next);
+      return changes;
+    };
+
+    return creator(enhancedSet, get, store);
+  };
+
+/**
+ * Compose multiple middleware functions
+ */
+export const composeMiddleware =
+  <T>(...middlewares: ((config: MiddlewareConfig) => StateCreator<T, []>)[]) =>
+  (config: MiddlewareConfig): StateCreator<T, []> => {
+    return middlewares.reduceRight(
+      (acc, middleware) => middleware(config)(acc),
+      ((set: any, get: any, store: any) => ({
+        set,
+        get,
+        store,
+      })) as StateCreator<T, []>
+    );
+  };
+
+/**
+ * Default middleware configuration
+ */
+export const defaultMiddlewareConfig: MiddlewareConfig = {
+  enableLogging: true,
+  enableAnalytics: false, // Disabled by default for privacy
+  enableOptimization: true,
+  enableDevtools: process.env.NODE_ENV === 'development',
+  enablePersist: true,
+  enableSubscriptions: true,
+  logLevels: [LogLevel.DEBUG, LogLevel.INFO, LogLevel.WARN, LogLevel.ERROR],
+  optimizationThreshold: 1000,
+};
+
+/**
+ * Performance metrics hook
+ */
+export const usePerformanceMetrics = () => {
+  const metrics: PerformanceMetrics = {
+    actionsPerSecond: 0,
+    averageActionDuration: 0,
+    memoryUsage: 0,
+    stateSize: 0,
+    lastOptimization: Date.now(),
+  };
+
+  return metrics;
+};

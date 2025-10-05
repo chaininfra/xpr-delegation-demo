@@ -1,0 +1,104 @@
+{
+  "name": "XPR Delegation Demo",
+  "short_name": "XPR Delegate",
+  "description": "Delegate votes to Block Producers on XPR Network",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#2563eb",
+  "orientation": "portrait-primary",
+  "scope": "/",
+  "lang": "en-US",
+  "categories": ["finance", "business", "productivity"],
+  "screenshots": [
+    {
+      "src": "/screenshots/desktop-screenshot.png",
+      "sizes": "1280x720",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "Desktop view of XPR Delegation Demo"
+    },
+    {
+      "src": "/screenshots/mobile-screenshot.png", 
+      "sizes": "375x667",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Mobile view of XPR Delegation Demo"
+    }
+  ],
+  "icons": [
+    {
+      "src": "/logo/logo-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable any"
+    },
+    {
+      "src": "/logo/logo-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable any"
+    },
+    {
+      "src": "/logo/logo.png",
+      "sizes": "any",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/logo/logo.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Connect Wallet",
+      "short_name": "Connect",
+      "description": "Connect your XPR wallet to start delegating votes",
+      "url": "/?action=connect",
+      "icons": [
+        {
+          "src": "/logo/logo-192x192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "View Validators",
+      "short_name": "Validators", 
+      "description": "Browse available Block Producers",
+      "url": "/?action=validators",
+      "icons": [
+        {
+          "src": "/logo/logo-192x192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    }
+  ],
+  "related_applications": [
+    {
+      "platform": "web",
+      "url": "https://protonchain.com"
+    },
+    {
+      "platform": "web", 
+      "url": "https://webauth.com"
+    }
+  ],
+  "prefer_related_applications": false,
+  "edge_side_panel": {
+    "preferred_width": 400
+  },
+  "edge_side_panel_icons": [
+    {
+      "src": "/logo/logo-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    }
+  ]
+}
