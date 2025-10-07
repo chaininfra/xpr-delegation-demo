@@ -26,6 +26,8 @@ const TransferPage: React.FC<TransferPageProps> = ({
   network,
   handleTransfer,
   message,
+  pendingTransferData,
+  onClearPendingData,
 }) => {
   // Local state
   const [tokens, setTokens] = useState<TokenBalance[]>([]);
@@ -127,11 +129,11 @@ const TransferPage: React.FC<TransferPageProps> = ({
         <div className='max-w-2xl mx-auto px-4 sm:px-6 lg:px-8'>
           {/* Page Header */}
           <div className='text-center mb-8'>
-            <div className="flex justify-center mb-4">
+            <div className='flex justify-center mb-4'>
               <img
-                src="/logo/logo.svg"
-                alt="XPR Logo"
-                className="h-20 w-20"
+                src='/logo/logo.svg'
+                alt='XPR Logo'
+                className='h-20 w-20'
                 draggable={false}
               />
             </div>
@@ -282,6 +284,8 @@ const TransferPage: React.FC<TransferPageProps> = ({
                   onTransfer={handleTransferSubmit}
                   loading={isLoading}
                   error={error}
+                  pendingTransferData={pendingTransferData}
+                  onClearPendingData={onClearPendingData}
                 />
               )}
             </>

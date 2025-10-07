@@ -10,7 +10,12 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import type { TransferData, TokenBalance, AccountInfo } from '../types';
+import type {
+  TransferData,
+  TokenBalance,
+  AccountInfo,
+  RequestPaymentData,
+} from '../types';
 
 interface TransferFormProps {
   /** Selected token */
@@ -25,6 +30,10 @@ interface TransferFormProps {
   error?: string | null;
   /** Success message */
   success?: string | null;
+  /** Pending transfer data from URL */
+  pendingTransferData?: RequestPaymentData | null;
+  /** Clear pending transfer data handler */
+  onClearPendingData?: () => void;
 }
 
 /**
@@ -37,6 +46,8 @@ const TransferForm: React.FC<TransferFormProps> = ({
   loading = false,
   error = null,
   success = null,
+  pendingTransferData,
+  onClearPendingData,
 }) => {
   // Form state
   const [formData, setFormData] = useState({
@@ -51,13 +62,36 @@ const TransferForm: React.FC<TransferFormProps> = ({
     memo?: string;
   }>({});
 
+  /**
+   * Auto-fill form when pending transfer data is available
+   */
+  useEffect(() => {
+    if (pendingTransferData) {
+      console.log(
+        'TransferForm: Auto-filling form with pendingTransferData:',
+        pendingTransferData
+      );
+      // Extract amount and symbol from the amount string (e.g., "100 XPR")
+      const amountParts = pendingTransferData.amount.split(' ');
+      const amount = amountParts[0] || '';
+
+      setFormData({
+        to: pendingTransferData.recipient || '',
+        amount: amount,
+        memo: pendingTransferData.memo || '',
+      });
+    }
+  }, [pendingTransferData]);
+
   const [localLoading, setLocalLoading] = useState(false);
 
-  // Reset form when token changes
+  // Reset form when token changes (but preserve pending data)
   useEffect(() => {
-    setFormData({ to: '', amount: '', memo: '' });
-    setValidationErrors({});
-  }, [token]);
+    if (!pendingTransferData) {
+      setFormData({ to: '', amount: '', memo: '' });
+      setValidationErrors({});
+    }
+  }, [token, pendingTransferData]);
 
   // Validate form data
   const validateForm = (): boolean => {
@@ -189,6 +223,40 @@ const TransferForm: React.FC<TransferFormProps> = ({
               <p className='text-sm font-medium text-blue-900'>Available</p>
               <p className='text-sm text-blue-700'>{token.formatted}</p>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Pending Transfer Data Info */}
+      {pendingTransferData && (
+        <div className='mb-6 bg-green-50 border border-green-200 rounded-lg p-4'>
+          <div className='flex items-start justify-between'>
+            <div className='flex-1'>
+              <h4 className='text-sm font-medium text-green-900 mb-2'>
+                Payment Request Received
+              </h4>
+              <div className='text-sm text-green-800 space-y-1'>
+                <p>
+                  <strong>From:</strong> {pendingTransferData.recipient}
+                </p>
+                <p>
+                  <strong>Amount:</strong> {pendingTransferData.amount}
+                </p>
+                {pendingTransferData.memo && (
+                  <p>
+                    <strong>Memo:</strong> {pendingTransferData.memo}
+                  </p>
+                )}
+              </div>
+            </div>
+            {onClearPendingData && (
+              <button
+                onClick={onClearPendingData}
+                className='ml-4 text-green-600 hover:text-green-800 text-sm font-medium'
+              >
+                Clear
+              </button>
+            )}
           </div>
         </div>
       )}

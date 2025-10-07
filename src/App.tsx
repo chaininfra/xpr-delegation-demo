@@ -16,7 +16,7 @@
  */
 import React, { useState, useEffect, useRef } from 'react';
 
-import { HomePage, TransferPage } from './pages/index';
+import { Router } from './components/index';
 import { smartCache, CacheKeys } from './utils/SmartCache';
 import { RefreshTriggers } from './utils/RefreshTriggers';
 import {
@@ -33,6 +33,7 @@ import {
 } from './services';
 import { transferTokens, clearTransferCache } from './services/token';
 import { extractTransactionId } from './utils/transactionUtils';
+import { generatePaymentRequestUrl } from './utils/urlUtils';
 import type {
   WalletInstance as Wallet,
   AccountInfo,
@@ -40,6 +41,7 @@ import type {
   NetworkType,
   StakeData,
   TransferData,
+  RequestPaymentData,
 } from './types';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -53,7 +55,13 @@ const App: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(false); // Loading state for async operations
   const [message, setMessage] = useState<any>(null); // Status messages for user feedback
   const [network, setNetwork] = useState<NetworkType>('testnet'); // Current network (testnet/mainnet)
-  const [currentPage, setCurrentPage] = useState<'home' | 'transfer'>('home'); // Current page
+  const [currentPage, setCurrentPage] = useState<
+    'home' | 'transfer' | 'request'
+  >('home'); // Current page
+  const [urlRequestData, setUrlRequestData] =
+    useState<RequestPaymentData | null>(null); // Request data from URL
+  const [pendingTransferData, setPendingTransferData] =
+    useState<RequestPaymentData | null>(null); // Pending transfer data from URL
 
   // Performance optimization: prevent duplicate API calls
   const dataLoadedRef = useRef<boolean>(false); // Track if data has been loaded
@@ -249,6 +257,15 @@ const App: React.FC = () => {
           type: 'success',
           text: `Connected to ${walletInstance.account.account_name}`,
         });
+
+        // If there's pending transfer data, redirect to transfer page
+        if (pendingTransferData) {
+          setCurrentPage('transfer');
+          setMessage({
+            type: 'success',
+            text: `Connected! Processing payment request: ${pendingTransferData.amount} from ${pendingTransferData.recipient}`,
+          });
+        }
       }
     } catch (error: unknown) {
       setMessage({
@@ -503,50 +520,86 @@ const App: React.FC = () => {
   };
 
   /**
+   * Handle payment request creation
+   */
+  const handleRequest = async (
+    requestData: RequestPaymentData
+  ): Promise<void> => {
+    if (!wallet?.session) {
+      throw new Error('Wallet not connected');
+    }
+
+    setLoading(true);
+    setMessage(null);
+
+    try {
+      // Generate shareable payment request URL
+      const shareableUrl = generatePaymentRequestUrl(requestData);
+
+      // Simulate API call delay
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
+      setMessage({
+        type: 'success',
+        text: `Payment request created successfully! Share the link below with ${requestData.recipient}`,
+      });
+
+      // Store the generated URL for copying
+      console.log('Setting urlRequestData with shareableUrl:', {
+        ...requestData,
+        shareableUrl,
+      });
+      setUrlRequestData({ ...requestData, shareableUrl });
+    } catch (error: unknown) {
+      setMessage({
+        type: 'error',
+        text: `Request failed: ${
+          error instanceof Error ? error.message : 'Unknown error'
+        }`,
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  /**
    * Navigation handlers
    */
-  const navigateToPage = (page: 'home' | 'transfer') => {
+  const navigateToPage = (page: 'home' | 'transfer' | 'request') => {
     setCurrentPage(page);
     // Don't clear message on navigation - let user see important messages
   };
 
   /**
-   * Render current page based on routing
+   * Render current page using Router component
    */
   const renderCurrentPage = () => {
-    switch (currentPage) {
-      case 'transfer':
-        return (
-          <TransferPage
-            wallet={wallet}
-            account={account}
-            loading={loading}
-            network={network}
-            handleTransfer={handleTransfer}
-            message={message}
-          />
-        );
-      default:
-      case 'home':
-        return (
-          <HomePage
-            wallet={wallet}
-            account={account}
-            blockProducers={blockProducers}
-            selectedBPs={selectedBPs}
-            loading={loading}
-            message={message}
-            network={network}
-            handleConnectWallet={handleConnectWallet}
-            handleDisconnectWallet={handleDisconnectWallet}
-            handleDelegateVotes={handleDelegateVotes}
-            handleNetworkChange={handleNetworkChange}
-            handleStakeResources={handleStakeResources}
-            handleSelectBP={handleSelectBP}
-            navigateToTransfer={() => navigateToPage('transfer')}
-          />
-        );
-    }
+    return (
+      <Router
+        currentPage={currentPage}
+        setCurrentPage={setCurrentPage}
+        wallet={wallet}
+        account={account}
+        pendingTransferData={pendingTransferData}
+        setPendingTransferData={setPendingTransferData}
+        urlRequestData={urlRequestData}
+        setUrlRequestData={setUrlRequestData}
+        message={message}
+        setMessage={setMessage}
+        handleConnectWallet={handleConnectWallet}
+        handleDisconnectWallet={handleDisconnectWallet}
+        handleDelegateVotes={handleDelegateVotes}
+        handleNetworkChange={handleNetworkChange}
+        handleStakeResources={handleStakeResources}
+        handleSelectBP={handleSelectBP}
+        handleTransfer={handleTransfer}
+        handleRequest={handleRequest}
+        blockProducers={blockProducers}
+        selectedBPs={selectedBPs}
+        loading={loading}
+        network={network}
+      />
+    );
   };
 
   return (
@@ -594,6 +647,16 @@ const App: React.FC = () => {
                 >
                   Transfer
                 </button>
+                <button
+                  onClick={() => navigateToPage('request')}
+                  className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                    currentPage === 'request'
+                      ? 'bg-blue-100 text-blue-700'
+                      : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
+                  }`}
+                >
+                  Request
+                </button>
               </div>
             </div>
 
@@ -632,6 +695,16 @@ const App: React.FC = () => {
                 }`}
               >
                 Transfer
+              </button>
+              <button
+                onClick={() => navigateToPage('request')}
+                className={`block px-3 py-2 rounded-md text-base font-medium w-full text-left ${
+                  currentPage === 'request'
+                    ? 'bg-blue-100 text-blue-700'
+                    : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
+                }`}
+              >
+                Request
               </button>
             </div>
           </div>

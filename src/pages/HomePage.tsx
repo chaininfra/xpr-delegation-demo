@@ -36,11 +36,11 @@ const HomePage: React.FC<HomePageProps> = ({
       <div className='max-w-4xl mx-auto px-4'>
         {/* Header */}
         <div className='text-center mb-8 pb-6 border-b-2 border-gray-100'>
-          <div className="flex justify-center mb-4">
+          <div className='flex justify-center mb-4'>
             <img
-              src="/logo/logo.svg"
-              alt="XPR Logo"
-              className="h-20 w-20"
+              src='/logo/logo.svg'
+              alt='XPR Logo'
+              className='h-20 w-20'
               draggable={false}
             />
           </div>

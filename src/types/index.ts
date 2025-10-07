@@ -386,6 +386,10 @@ export interface TransferPageProps {
   handleTransfer: (transferData: TransferData) => Promise<void>;
   /** Status message */
   message?: Message | null;
+  /** Pending transfer data from URL */
+  pendingTransferData?: RequestPaymentData | null;
+  /** Clear pending transfer data handler */
+  onClearPendingData?: () => void;
 }
 
 export interface TokenSelectorProps {
@@ -410,4 +414,90 @@ export interface TransferFormProps {
   loading: boolean;
   /** Error message */
   error: string | null;
+  /** Pending transfer data from URL */
+  pendingTransferData?: RequestPaymentData | null;
+  /** Clear pending transfer data handler */
+  onClearPendingData?: () => void;
+}
+
+// =============================================================================
+// REQUEST PAYMENT TYPES
+// =============================================================================
+
+/**
+ * Request payment data structure
+ */
+export interface RequestPaymentData {
+  /** Recipient account name */
+  recipient: string;
+  /** Requested amount */
+  amount: string;
+  /** Request memo/note */
+  memo: string;
+  /** Token symbol (default: XPR) */
+  symbol?: string;
+  /** Request expiration date */
+  expirationDate?: string;
+  /** Shareable URL for the request */
+  shareableUrl?: string;
+}
+
+/**
+ * Request payment form state
+ */
+export interface RequestFormState {
+  /** Recipient account name */
+  recipient: string;
+  /** Requested amount */
+  amount: string;
+  /** Request memo/note */
+  memo: string;
+  /** Token symbol */
+  symbol: string;
+  /** Loading state */
+  loading: boolean;
+  /** Error message */
+  error: string | null;
+  /** Success message */
+  success: string | null;
+}
+
+/**
+ * Request page component props
+ */
+export interface RequestPageProps {
+  /** Wallet instance */
+  wallet: WalletInstance | null;
+  /** Account information */
+  account: AccountInfo | null;
+  /** Loading state */
+  loading: boolean;
+  /** Network type */
+  network: NetworkType;
+  /** Request handler */
+  handleRequest: (requestData: RequestPaymentData) => Promise<void>;
+  /** Status message */
+  message?: Message | null;
+  /** Request data from URL */
+  urlRequestData?: RequestPaymentData | null;
+  /** Clear URL data handler */
+  onClearUrlData?: () => void;
+}
+
+/**
+ * Request form component props
+ */
+export interface RequestFormProps {
+  /** Account information */
+  account: AccountInfo | null;
+  /** Request handler */
+  onRequest: (requestData: RequestPaymentData) => Promise<void>;
+  /** Loading state */
+  loading: boolean;
+  /** Error message */
+  error: string | null;
+  /** Pre-filled request data from URL */
+  urlRequestData?: RequestPaymentData | null;
+  /** Clear URL data handler */
+  onClearUrlData?: () => void;
 }

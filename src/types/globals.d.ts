@@ -19,7 +19,10 @@ declare global {
   const Response: ResponseConstructor;
   const HTMLDivElement: new () => HTMLDivElement;
   const HTMLInputElement: new () => HTMLInputElement;
+  const HTMLTextAreaElement: new () => HTMLTextAreaElement;
   const HTMLElement: new () => HTMLElement;
+  const URLSearchParams: new (init?: string | URLSearchParams | Record<string, string> | string[][]) => URLSearchParams;
+  const navigator: Navigator;
   const Node: NodeConstructor;
   const MouseEvent: MouseEventConstructor;
   const Element: ElementConstructor;
